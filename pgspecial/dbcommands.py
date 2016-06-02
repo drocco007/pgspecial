@@ -181,6 +181,47 @@ def list_indexes(cur, pattern, verbose):
     return list_objects(cur, pattern, verbose, ['i', 's', ''])
 
 
+@special_command('\\dx', '\\dx [pattern]', 'List extensions.')
+def list_extensions(cur, pattern, verbose):
+    sql = '''
+        SELECT e.extname AS "Name",
+               e.extversion AS "Version",
+               n.nspname AS "Schema",
+               c.description AS "Description"
+        FROM pg_catalog.pg_extension e
+        LEFT JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+        LEFT JOIN pg_catalog.pg_description c ON c.objoid = e.oid
+                  AND c.classoid = 'pg_catalog.pg_extension'::pg_catalog.regclass
+    '''
+
+    schema_pattern, extension_pattern = sql_name_pattern(pattern)
+    wheres = []
+    params = []
+
+    if schema_pattern:
+        wheres.append('n.nspname ~ %s')
+        params.append(schema_pattern)
+
+    if extension_pattern:
+        wheres.append('e.extname ~ %s')
+        params.append(extension_pattern)
+
+    clauses = [
+        sql,
+        ('WHERE ' + ' AND '.join(wheres)) if wheres else '',
+        ' ORDER BY 1'
+    ]
+
+    sql = cur.mogrify(''.join(clauses), params)
+
+    log.debug(sql)
+    cur.execute(sql)
+
+    if cur.description:
+        headers = [x[0] for x in cur.description]
+        return [(None, cur, headers, cur.statusmessage)]
+
+
 @special_command('\\df', '\\df[+] [pattern]', 'List functions.')
 def list_functions(cur, pattern, verbose):
 
